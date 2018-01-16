@@ -1,0 +1,14 @@
+{
+  "name": "bankin-challenge",
+  "version": "1.0.0",
+  "description": "Parse les transactions du challenge",
+  "main": "bankin-challenge.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "jsdom": "^11.5.1"
+  },
+  "author": "Raphaël Calabro",
+  "license": "GPL 3.0"
+}
