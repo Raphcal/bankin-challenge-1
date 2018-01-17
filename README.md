@@ -27,5 +27,24 @@ Les étapes de 1 à 4 sont exécutées une première fois pour déterminer le no
 
 Le script s'arrête lorsqu'une page contient un tableau vide.
 
+## Résultat
+Le script affiche les transactions en JSON sur la ligne de commande au format suivant :
+~~~json
+[
+  {
+    "Account": "Checking",
+    "Transaction": "Transaction 1",
+    "Amount": 73,
+    "Currency": "€"
+  },
+  {
+    "Account": "Checking",
+    "Transaction": "Transaction 2",
+    "Amount": 54,
+    "Currency": "€"
+  }
+]
+~~~
+
 ## Liens externes
 [Page du challenge](https://blog.bankin.com/challenge-engineering-web-scrapping-dc5839543117)
