@@ -5,7 +5,17 @@ const { Script } = require('vm');
 
 const rootUrl = 'https://web.bankin.com/challenge/index.html';
 
-main();
+// main();
+multithreadedMain();
+
+/**
+ * Décrit une transaction.
+ * @typedef {Object} Transaction
+ * @property {string} Account - Nom du compte.
+ * @property {string} Transaction - Type de transaction.
+ * @property {number} Amount - Montant de la transaction.
+ * @property {string} Currency - Monnaie utilisée.
+ */
 
 /**
  * Fonction principale.
@@ -14,6 +24,8 @@ async function main() {
     const html = await downloadResourceAtURL(rootUrl);
     const scripts = await downloadScriptsOfHTML(html);
     
+    const time = new Date().getTime();
+
     let allResults = [];
     let pageResults;
     do {
@@ -22,6 +34,47 @@ async function main() {
     } while (pageResults.length > 0);
 
     displayTransactions(allResults);
+    console.log(`${(new Date().getTime() - time) / 1000}s`);
+}
+
+async function multithreadedMain() {
+    const html = await downloadResourceAtURL(rootUrl);
+    const scripts = await downloadScriptsOfHTML(html);
+    
+    let lastPage = Number.MAX_SAFE_INTEGER;
+    let pages = [];
+
+    async function spawnThread() {
+        let currentPage;
+        do {
+            currentPage = pages.length;
+            pages.push([]);
+            const pageResults = await transactionsStartingAt(currentPage * 50, html, scripts);
+            if (pageResults.length > 0) {
+                pages[currentPage] = pageResults;
+            } else {
+                if (currentPage < lastPage) {
+                    lastPage = currentPage;
+                }
+            }
+        } while(pages.length < lastPage);
+    }
+
+    const time = new Date().getTime();
+
+    const threads = [];
+    for (let index = 0; index < 8; index++) {
+        threads.push(spawnThread());
+    }
+
+    await Promise.all(threads);
+
+    let allResults = [];
+    for (let page of pages) {
+        allResults = allResults.concat(page);
+    }
+    displayTransactions(allResults);
+    console.log(`${(new Date().getTime() - time) / 1000}s`);
 }
 
 /**
@@ -71,7 +124,7 @@ async function downloadScriptsOfHTML(html) {
  * @param {number} startIndex Indice de départ.
  * @param {string} mainHtml Code HTML de la page à analyser.
  * @param {Script[]} scripts Scripts contenus dans la page.
- * @returns {Promise<Array<{Account: string; Transaction: string; Amount: number; Currency: string}[]>>} Transactions de la page.
+ * @returns {Promise<Transaction[]>} Transactions de la page.
  */
 function transactionsStartingAt(startIndex, mainHtml, scripts) {
     return new Promise((resolve, reject) => {
@@ -179,10 +232,10 @@ function currencyOf(value) {
 /**
  * Analyse le contenu du code HTML donné et en extrait les transactions.
  * @param {string} html HTML de la page.
- * @returns {{Account: string; Transaction: string; Amount: number; Currency: string}[]} Un tableau contenant les transactions.
+ * @returns {Transaction[]} Un tableau contenant les transactions.
  */
 function parseTransactions(html) {
-    /** @type {{Account: string; Transaction: string; Amount: number; Currency: string}[]} */
+    /** @type {Transaction[]} */
     const transactions = [];
     
     const regex = /<td>([^<]+)<\/td><td>([^<]+)<\/td><td>([^<]+)<\/td>/g;
