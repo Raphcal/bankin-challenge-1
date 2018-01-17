@@ -1,6 +1,7 @@
 # Participation au challenge WebScrapping de Bankin'
 
 ## Technologies utilisées
+- ECMAScript 2017
 - NodeJS 8+
 - [JSDOM 11](https://github.com/tmpvar/jsdom)
 
