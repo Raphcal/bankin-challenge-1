@@ -3,23 +3,30 @@ const { URL } = require('url');
 const { JSDOM } = require('jsdom');
 const { Script } = require('vm');
 
+/**
+ * URL de la page à analyser.
+ */
 const rootUrl = 'https://web.bankin.com/challenge/index.html';
 
-let lastPage = Number.MAX_SAFE_INTEGER;
-/** @type {Transaction[][]} */
+/**
+ * Transactions des pages analysées.
+ * @type {Transaction[][]}
+ */
 const pages = [];
+
+/**
+ * Numéro de la dernière page.
+ */
+let lastPage = Number.MAX_SAFE_INTEGER;
+
+/**
+ * Nombre de transactions par page.
+ * @type {number}
+ */
+let transactionCountByPage;
 
 // Exécution du script.
 main();
-
-/**
- * Décrit une transaction.
- * @typedef {Object} Transaction
- * @property {string} Account - Nom du compte.
- * @property {string} Transaction - Type de transaction.
- * @property {number} Amount - Montant de la transaction.
- * @property {string} Currency - Monnaie utilisée.
- */
 
 /**
  * Fonction principale.
@@ -28,39 +35,57 @@ async function main() {
     const html = await downloadResourceAtURL(rootUrl);
     const scripts = await downloadScriptsOfHTML(html);
 
-    await runThreads(html, scripts);
+    // Récupération de la première page et calcul du nombre de transactions par page.
+    const firstPage = await transactionsStartingAt(0, html, scripts);
+    transactionCountByPage = firstPage.length;
+    pages.push(firstPage);
 
+    // Analyse des pages suivantes.
+    await runAllPageParsers(html, scripts);
+
+    // Affiche les transactions.
     displayTransactions();
 }
 
-async function runThreads(html, scripts) {
-    const threads = [];
-    for (let index = 0; index < 10; index++) {
-        threads.push(spawnThread(html, scripts));
+/**
+ * Créé et démarre plusieurs analyseurs pour lire les transactions.
+ * @param {string} html Code HTML de la page à analyser.
+ * @param {Script[]} scripts Tableau des scripts de la page.
+ */
+async function runAllPageParsers(html, scripts) {
+    const numberOfParser = 50;
+
+    const parsers = [];
+    for (let index = 0; index < numberOfParser; index++) {
+        parsers.push(createPageParser(html, scripts));
     }
 
-    return Promise.all(threads);
+    return Promise.all(parsers);
 }
 
-async function spawnThread(html, scripts) {
+/**
+ * Créé un analyseur de page. Un analyseur peut traiter plusieurs pages.
+ * @param {string} html Code HTML de la page à analyser.
+ * @param {Script[]} scripts Tableau des scripts de la page.
+ */
+async function createPageParser(html, scripts) {
     let currentPage;
     do {
         currentPage = pages.length;
         pages.push([]);
-        const pageResults = await transactionsStartingAt(currentPage * 50, html, scripts);
+
+        const pageResults = await transactionsStartingAt(currentPage * transactionCountByPage, html, scripts);
         if (pageResults.length > 0) {
             pages[currentPage] = pageResults;
-        } else {
-            if (currentPage < lastPage) {
-                lastPage = currentPage;
-            }
+        }
+        else if (currentPage < lastPage) {
+            lastPage = currentPage;
         }
     } while(pages.length < lastPage);
 }
 
 /**
  * Affiche les transactions en JSON sur la ligne de commande.
- * @param {{Account: string; Transaction: string; Amount: number; Currency: string}[]} transactions 
  */
 function displayTransactions() {
     /** @type {Transaction[]} */
@@ -114,35 +139,35 @@ async function downloadScriptsOfHTML(html) {
  */
 function transactionsStartingAt(startIndex, mainHtml, scripts) {
     return new Promise((resolve, reject) => {
-        const url = `${rootUrl}?start=${startIndex}`;
-
         const dom = new JSDOM(mainHtml, {
-            url: url,
+            url: `${rootUrl}?start=${startIndex}`,
             userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_2) AppleWebKit/604.4.7 (KHTML, like Gecko) Version/11.0.2 Safari/604.4.7",
             runScripts: "outside-only",
             beforeParse: (window) => {
+                // Écoute les recherches et les créations d'éléments HTML.
                 const document = window.document;
-                automateClickOnGenerateButton(document);
-                automateTransactionParsingWhenTableIsCreated(document, resolve);
+                listenTo(document, 'getElementById', autoClickOnGenerateButton);
+                listenTo(document, 'createElement', autoParseTransactionsWhenTableIsCreated(document, resolve));
 
+                // Remplace `alert` par une fonction vide pour ne pas être gêné pendant l'exécution.
                 window.alert = (message) => {};
             }
         });
 
+        // Démarre l'exécution des scripts de la page.
         scripts.forEach((script) => dom.runVMScript(script));
     });
 }
 
 /**
  * Automatise le clic sur le bouton "Reload Transactions".
- * @param {Document} document Document de la page en cours de traitement.
+ * @param {HTMLElement} element Élément récupéré par id.
+ * @param {string} id Identifiant de l'élément.
  */
-function automateClickOnGenerateButton(document) {
-    spyOn(document, 'getElementById', (element, id) => {
-        if (id === 'btnGenerate') {
-            setTimeout(() => element.click(), 100);
-        }
-    });
+function autoClickOnGenerateButton(element, id) {
+    if (id === 'btnGenerate') {
+        setTimeout(() => element.click(), 100);
+    }
 }
 
 /**
@@ -150,11 +175,11 @@ function automateClickOnGenerateButton(document) {
  * @param {Document} document Document de la page en cours de traitement.
  * @param {Function} callback Fonction à appeler lorsque les transactions sont lues.
  */
-function automateTransactionParsingWhenTableIsCreated(document, callback) {
-    let tableCellWasCreated = false;
-    spyOn(document, 'createElement', (element, tag) => {
-        if (!tableCellWasCreated && tag === 'th') {
-            tableCellWasCreated = true;
+function autoParseTransactionsWhenTableIsCreated(document, callback) {
+    let tableHasBeenCreated = false;
+    return (element, tag) => {
+        if (!tableHasBeenCreated && tag === 'th') {
+            tableHasBeenCreated = true;
 
             setTimeout(() => {
                 const html = htmlContainingTransactions(document);
@@ -162,16 +187,19 @@ function automateTransactionParsingWhenTableIsCreated(document, callback) {
                 callback(transactions);
             }, 100);
         }
-    });
+    };
 }
 
 /**
  * Écoute les appels à la fonction `functionName` sur l'objet `object`.
+ *
+ * Lorsqu'un appel est détecté, le callback donné est appelé avec le résultat de la fonction
+ * en premier argument. Les arguments suivants sont les arguments passés à la fonction écoutée.
  * @param {*} object Objet à écouter.
  * @param {string} functionName Nom de la fonction à écouter.
- * @param {Function?} callback Code à exécuter quand la fonction `functionName` est appelée sur l'objet donné.
+ * @param {?Function} callback Code à exécuter quand la fonction `functionName` est appelée sur l'objet donné.
  */
-function spyOn(object, functionName, callback) {
+function listenTo(object, functionName, callback) {
     const originalFunction = object[functionName];
     if (originalFunction) {
         object[functionName] = function() {
@@ -236,3 +264,12 @@ function parseTransactions(html) {
 
     return transactions;
 }
+
+/**
+ * Détail d'une transaction.
+ * @typedef {Object} Transaction
+ * @property {string} Account - Nom du compte.
+ * @property {string} Transaction - Type de transaction.
+ * @property {number} Amount - Montant de la transaction.
+ * @property {string} Currency - Monnaie utilisée.
+ */
