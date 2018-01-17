@@ -5,8 +5,12 @@ const { Script } = require('vm');
 
 const rootUrl = 'https://web.bankin.com/challenge/index.html';
 
-// main();
-multithreadedMain();
+let lastPage = Number.MAX_SAFE_INTEGER;
+/** @type {Transaction[][]} */
+const pages = [];
+
+// Exécution du script.
+main();
 
 /**
  * Décrit une transaction.
@@ -23,66 +27,48 @@ multithreadedMain();
 async function main() {
     const html = await downloadResourceAtURL(rootUrl);
     const scripts = await downloadScriptsOfHTML(html);
-    
-    const time = new Date().getTime();
 
-    let allResults = [];
-    let pageResults;
-    do {
-        pageResults = await transactionsStartingAt(allResults.length, html, scripts);
-        allResults = allResults.concat(pageResults);
-    } while (pageResults.length > 0);
+    await runThreads(html, scripts);
 
-    displayTransactions(allResults);
-    console.log(`${(new Date().getTime() - time) / 1000}s`);
+    displayTransactions();
 }
 
-async function multithreadedMain() {
-    const html = await downloadResourceAtURL(rootUrl);
-    const scripts = await downloadScriptsOfHTML(html);
-    
-    let lastPage = Number.MAX_SAFE_INTEGER;
-    let pages = [];
-
-    async function spawnThread() {
-        let currentPage;
-        do {
-            currentPage = pages.length;
-            pages.push([]);
-            const pageResults = await transactionsStartingAt(currentPage * 50, html, scripts);
-            if (pageResults.length > 0) {
-                pages[currentPage] = pageResults;
-            } else {
-                if (currentPage < lastPage) {
-                    lastPage = currentPage;
-                }
-            }
-        } while(pages.length < lastPage);
-    }
-
-    const time = new Date().getTime();
-
+async function runThreads(html, scripts) {
     const threads = [];
-    for (let index = 0; index < 8; index++) {
-        threads.push(spawnThread());
+    for (let index = 0; index < 10; index++) {
+        threads.push(spawnThread(html, scripts));
     }
 
-    await Promise.all(threads);
+    return Promise.all(threads);
+}
 
-    let allResults = [];
-    for (let page of pages) {
-        allResults = allResults.concat(page);
-    }
-    displayTransactions(allResults);
-    console.log(`${(new Date().getTime() - time) / 1000}s`);
+async function spawnThread(html, scripts) {
+    let currentPage;
+    do {
+        currentPage = pages.length;
+        pages.push([]);
+        const pageResults = await transactionsStartingAt(currentPage * 50, html, scripts);
+        if (pageResults.length > 0) {
+            pages[currentPage] = pageResults;
+        } else {
+            if (currentPage < lastPage) {
+                lastPage = currentPage;
+            }
+        }
+    } while(pages.length < lastPage);
 }
 
 /**
  * Affiche les transactions en JSON sur la ligne de commande.
  * @param {{Account: string; Transaction: string; Amount: number; Currency: string}[]} transactions 
  */
-function displayTransactions(transactions) {
-    console.log(JSON.stringify(transactions, null, 2));
+function displayTransactions() {
+    /** @type {Transaction[]} */
+    let allResults = [];
+    for (let page of pages) {
+        allResults = allResults.concat(page);
+    }
+    console.log(JSON.stringify(allResults, null, 2));
 }
 
 /**
