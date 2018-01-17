@@ -4,8 +4,6 @@ const { JSDOM } = require('jsdom');
 const { Script } = require('vm');
 
 const rootUrl = 'https://web.bankin.com/challenge/index.html';
-let mainHtml;
-let scripts;
 
 main();
 
@@ -13,17 +11,17 @@ main();
  * Fonction principale.
  */
 async function main() {
-    mainHtml = await download(rootUrl);
-    scripts = await extractScripts(mainHtml);
+    const html = await download(rootUrl);
+    const scripts = await extractScripts(html);
     
     let allResults = [];
     let pageResults;
     do {
-        pageResults = await transactionsStartingAt(allResults.length);
+        pageResults = await transactionsStartingAt(allResults.length, html, scripts);
         allResults = allResults.concat(pageResults);
     } while (pageResults.length > 0);
 
-    console.log('done');
+    console.log(JSON.stringify(allResults, null, 2));
 }
 
 /**
@@ -62,9 +60,12 @@ async function extractScripts(html) {
 
 /**
  * Télécharge les transactions à partir en commençant à l'indice donné.
- * @param {Promise<Array<*>>} startIndex Indice de départ.
+ * @param {number} startIndex Indice de départ.
+ * @param {string} mainHtml Code HTML de la page à analyser.
+ * @param {Script[]} scripts Scripts contenus dans la page.
+ * @returns {Promise<Array<{Account: string; Transaction: string; Amount: number; Currency: string}[]>>} Transactions de la page.
  */
-function transactionsStartingAt(startIndex) {
+function transactionsStartingAt(startIndex, mainHtml, scripts) {
     return new Promise((resolve, reject) => {
         const url = `${rootUrl}?start=${startIndex}`;
 
@@ -76,34 +77,35 @@ function transactionsStartingAt(startIndex) {
                 const document = window.document;
                 spyOn(document, 'getElementById', (element, id) => {
                     if (id === 'btnGenerate') {
-                        console.log('click on generate');
                         setTimeout(() => element.click(), 100);
                     }
                 });
                 let lastTag = '';
+                let tableCellWasCreated = false;
                 spyOn(document, 'createElement', (element, tag) => {
-                    if (lastTag === 'td' && tag !== 'td') {
-                        console.log('tableWillAppear');
+                    if (!tableCellWasCreated && tag === 'th') {
+                        tableCellWasCreated = true;
                         setTimeout(() => {
-                            let results;
+                            /** @type {{Account: string; Transaction: string; Amount: number; Currency: string}[]} */
+                            let transactions;
 
                             /** @type {HTMLFrameElement} */
                             const frame = document.getElementById('fm');
                             if (frame) {
-                                results = parseResults(frame.contentDocument.body.innerHTML);
+                                transactions = parseTransactions(frame.contentDocument.body.innerHTML);
                             } else {
-                                results = parseResults(dom.serialize());
+                                transactions = parseTransactions(dom.serialize());
                             }
-                            console.log(results);
-                            resolve(results);
+                            resolve(transactions);
                         }, 100);
                     }
                     lastTag = tag;
                 });
         
-                window.alert = (message) => console.log(message);
+                window.alert = (message) => {};
             }
         });
+
         scripts.forEach((script) => dom.runVMScript(script));
     });
 }
@@ -126,31 +128,41 @@ function spyOn(object, functionName, callback) {
 };
 
 /**
+ * Extrait la valeur de la chaîne donnée.
+ * @param {string} value Chaîne à analyser.
+ * @returns La valeur.
+ */
+function amountOf(value) {
+    return parseInt(value.match(/[0-9]+/)[0]);
+}
+
+/**
+ * Extrait le symbol monétaire de la chaîne donnée.
+ * @param {string} value Chaîne à analyser.
+ * @returns Le symbol monétaire.
+ */
+function currencyOf(value) {
+    return value.match(/[^0-9]+/)[0];
+}
+
+/**
  * Analyse le contenu du code HTML donné et en extrait les transactions.
  * @param {string} html HTML de la page.
  * @returns {{Account: string; Transaction: string; Amount: number; Currency: string}[]} Un tableau contenant les transactions.
  */
-function parseResults(html) {
+function parseTransactions(html) {
+    /** @type {{Account: string; Transaction: string; Amount: number; Currency: string}[]} */
+    const transactions = [];
+    
     const regex = /<td>([^<]+)<\/td><td>([^<]+)<\/td><td>([^<]+)<\/td>/g;
-    const result = [];
-
-    let amount, currency, json;
     while ((values = regex.exec(html)) !== null) {
-        amount = parseInt(values[3].match(/[0-9]+/)[0]);
-        currency = values[3].match(/[^0-9]+/)[0];
-        json = {
+        transactions.push({
             Account: values[1],
             Transaction: values[2],
-            Amount: amount,
-            Currency: currency
-        };
-        result.push(json);
+            Amount: amountOf(values[3]),
+            Currency: currencyOf(values[3])
+        });
     }
 
-    if (result.length === 0) {
-        console.log(html);
-        console.log('0 !');
-    }
-
-    return result;
+    return transactions;
 };
