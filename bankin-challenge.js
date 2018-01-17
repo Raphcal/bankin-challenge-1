@@ -11,8 +11,8 @@ main();
  * Fonction principale.
  */
 async function main() {
-    const html = await download(rootUrl);
-    const scripts = await extractScripts(html);
+    const html = await downloadResourceAtURL(rootUrl);
+    const scripts = await downloadScriptsOfHTML(html);
     
     let allResults = [];
     let pageResults;
@@ -21,7 +21,15 @@ async function main() {
         allResults = allResults.concat(pageResults);
     } while (pageResults.length > 0);
 
-    console.log(JSON.stringify(allResults, null, 2));
+    displayTransactions(allResults);
+}
+
+/**
+ * Affiche les transactions en JSON sur la ligne de commande.
+ * @param {{Account: string; Transaction: string; Amount: number; Currency: string}[]} transactions 
+ */
+function displayTransactions(transactions) {
+    console.log(JSON.stringify(transactions, null, 2));
 }
 
 /**
@@ -29,7 +37,7 @@ async function main() {
  * @param {string} url URL à télécharger.
  * @returns {Promise<string>} Le contenu correspondant à l'URL donné.
  */
-function download(url) {
+function downloadResourceAtURL(url) {
     return new Promise((resolve, reject) => {
         https.get(url, (response) => {
             let data = '';
@@ -37,26 +45,26 @@ function download(url) {
             response.on('end', () => resolve(data));
         });
     });
-};
+}
 
 /**
  * Extrait et télécharge les scripts inclus dans le code HTML donné.
  * @param {string} html Code HTML d'où extraire les scripts.
  * @returns {Script[]} Tableau contenant les scripts extraits.
  */
-async function extractScripts(html) {
+async function downloadScriptsOfHTML(html) {
     /** @type {Promise<string>[]} */
     const downloads = [];
 
     const scriptRegex = /<script(?:[^>]+)src="([^"]+)"/g;
     for (let match = scriptRegex.exec(html); match != null; match = scriptRegex.exec(html)) {
         const url = new URL(match[1], rootUrl);
-        downloads.push(download(url));
+        downloads.push(downloadResourceAtURL(url));
     }
 
     const scripts = await Promise.all(downloads);
     return scripts.map((script) => new Script(script));
-};
+}
 
 /**
  * Télécharge les transactions à partir en commençant à l'indice donné.
@@ -75,38 +83,46 @@ function transactionsStartingAt(startIndex, mainHtml, scripts) {
             runScripts: "outside-only",
             beforeParse: (window) => {
                 const document = window.document;
-                spyOn(document, 'getElementById', (element, id) => {
-                    if (id === 'btnGenerate') {
-                        setTimeout(() => element.click(), 100);
-                    }
-                });
-                let lastTag = '';
-                let tableCellWasCreated = false;
-                spyOn(document, 'createElement', (element, tag) => {
-                    if (!tableCellWasCreated && tag === 'th') {
-                        tableCellWasCreated = true;
-                        setTimeout(() => {
-                            /** @type {{Account: string; Transaction: string; Amount: number; Currency: string}[]} */
-                            let transactions;
+                automateClickOnGenerateButton(document);
+                automateTransactionParsingWhenTableIsCreated(document, resolve);
 
-                            /** @type {HTMLFrameElement} */
-                            const frame = document.getElementById('fm');
-                            if (frame) {
-                                transactions = parseTransactions(frame.contentDocument.body.innerHTML);
-                            } else {
-                                transactions = parseTransactions(dom.serialize());
-                            }
-                            resolve(transactions);
-                        }, 100);
-                    }
-                    lastTag = tag;
-                });
-        
                 window.alert = (message) => {};
             }
         });
 
         scripts.forEach((script) => dom.runVMScript(script));
+    });
+}
+
+/**
+ * Automatise le clic sur le bouton "Reload Transactions".
+ * @param {Document} document Document de la page en cours de traitement.
+ */
+function automateClickOnGenerateButton(document) {
+    spyOn(document, 'getElementById', (element, id) => {
+        if (id === 'btnGenerate') {
+            setTimeout(() => element.click(), 100);
+        }
+    });
+}
+
+/**
+ * Automatise la lecture des transactions quand le tableau est en cours de création.
+ * @param {Document} document Document de la page en cours de traitement.
+ * @param {Function} callback Fonction à appeler lorsque les transactions sont lues.
+ */
+function automateTransactionParsingWhenTableIsCreated(document, callback) {
+    let tableCellWasCreated = false;
+    spyOn(document, 'createElement', (element, tag) => {
+        if (!tableCellWasCreated && tag === 'th') {
+            tableCellWasCreated = true;
+
+            setTimeout(() => {
+                const html = htmlContainingTransactions(document);
+                const transactions = parseTransactions(html);
+                callback(transactions);
+            }, 100);
+        }
     });
 }
 
@@ -125,12 +141,27 @@ function spyOn(object, functionName, callback) {
             return result;
         };
     }
-};
+}
+
+/**
+ * Récupère le code HTML contenant le tableau des transactions.
+ * @param {Document} document Document à analyser.
+ * @returns {string} Le code HTML contenant le tableau des transactions.
+ */
+function htmlContainingTransactions(document) {
+    /** @type {HTMLFrameElement} */
+    const frame = document.getElementById('fm');
+    if (frame) {
+        return frame.contentDocument.body.innerHTML;
+    } else {
+        return document.body.innerHTML;
+    }
+}
 
 /**
  * Extrait la valeur de la chaîne donnée.
  * @param {string} value Chaîne à analyser.
- * @returns La valeur.
+ * @returns {number} La valeur.
  */
 function amountOf(value) {
     return parseInt(value.match(/[0-9]+/)[0]);
@@ -139,7 +170,7 @@ function amountOf(value) {
 /**
  * Extrait le symbol monétaire de la chaîne donnée.
  * @param {string} value Chaîne à analyser.
- * @returns Le symbol monétaire.
+ * @returns {string} Le symbol monétaire.
  */
 function currencyOf(value) {
     return value.match(/[^0-9]+/)[0];
@@ -165,4 +196,4 @@ function parseTransactions(html) {
     }
 
     return transactions;
-};
+}
