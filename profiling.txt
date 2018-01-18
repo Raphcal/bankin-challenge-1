@@ -1,7 +1,8 @@
-autoParseTransactionsWhenTableIsCreated: run 30617, total time 0.054s, avg 0.0017637260345559657ms
-autoClickOnGenerateButton: run 2286, total time 0.012s, avg 0.005249343832020997ms
-transactionsStartingAt: run 570, total time 7.407s, avg 12.994736842105263ms
-parseTransactions: run 570, total time 0.01s, avg 0.017543859649122806ms
-callback(transactions): run 570, total time 1349.643s, avg 2367.794736842105ms
-createPageParser: run 500, total time 1353.611s, avg 2707.222ms
-main: run 10, total time 110.433s, avg 11043.3ms
+autoParseTransactionsWhenTableIsCreated: run 184691, total time 0.265s, avg 0.0014348289846283792ms
+autoClickOnGenerateButton: run 4559, total time 0.018s, avg 0.0039482342618995395ms
+transactionsStartingAt: run 1149, total time 21.907s, avg 19.06614447345518ms
+parseTransactions: run 1149, total time 0.091s, avg 0.07919930374238468ms
+callback(transactions): run 1149, total time 2948.546s, avg 2566.1845082680593ms
+createPageParser: run 500, total time 2971.171s, avg 5942.342ms
+displayTransactions: run 10, total time 0.04s, avg 4ms
+main: run 10, total time 125.757s, avg 12575.7ms

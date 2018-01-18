@@ -14,7 +14,7 @@ const rootUrl = 'https://web.bankin.com/challenge/index.html';
  * Transactions des pages analysées.
  * @type {Transaction[][]}
  */
-const pages = [];
+let pages = [];
 
 /**
  * Numéro de la dernière page.
@@ -59,20 +59,25 @@ function newStopwatch(name) {
  * Fonction principale.
  */
 async function main() {
+    pages = [];
+    lastPage = Number.MAX_SAFE_INTEGER;
     const stopwatch = newStopwatch('main');
+
     const html = await downloadResourceAtURL(rootUrl);
     const scripts = await downloadScriptsOfHTML(html);
 
     // Récupération de la première page et calcul du nombre de transactions par page.
-    const firstPage = await transactionsStartingAt(0, html, scripts);
+    const firstPageStopwatch = newStopwatch('firstPage');
+    const firstPage = await Promise.race([1,2,3,4,5].map(() => transactionsStartingAt(0, html, scripts)));
     transactionCountByPage = firstPage.length;
     pages.push(firstPage);
+    firstPageStopwatch.stop();
 
     // Analyse des pages suivantes.
     await runAllPageParsers(html, scripts);
 
     // Affiche les transactions.
-    // displayTransactions();
+    displayTransactions();
     stopwatch.stop();
 }
 
@@ -119,12 +124,15 @@ async function createPageParser(html, scripts) {
  * Affiche les transactions en JSON sur la ligne de commande.
  */
 function displayTransactions() {
+    const stopwatch = newStopwatch('displayTransactions');
     /** @type {Transaction[]} */
     let allResults = [];
     for (let page of pages) {
         allResults = allResults.concat(page);
     }
-    console.log(JSON.stringify(allResults, null, 2));
+    // console.log(JSON.stringify(allResults, null, 2));
+    console.log(`${allResults.length} results`);
+    stopwatch.stop();
 }
 
 /**
@@ -200,7 +208,7 @@ function transactionsStartingAt(startIndex, mainHtml, scripts) {
 function autoClickOnGenerateButton(element, id) {
     const stopwatch = newStopwatch('autoClickOnGenerateButton');
     if (id === 'btnGenerate') {
-        setTimeout(() => element.click(), 100);
+        setTimeout(() => element.click(), 10);
     }
     stopwatch.stop();
 }
@@ -223,7 +231,7 @@ function autoParseTransactionsWhenTableIsCreated(document, callback) {
                 const transactions = parseTransactions(html);
                 callback(transactions);
                 aStopwatch.stop();
-            }, 100);
+            }, 10);
         }
         stopwatch.stop();
     };
