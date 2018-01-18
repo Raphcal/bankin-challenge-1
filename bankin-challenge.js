@@ -3,6 +3,8 @@ const { URL } = require('url');
 const { JSDOM } = require('jsdom');
 const { Script } = require('vm');
 
+const profilerData = {};
+
 /**
  * URL de la page à analyser.
  */
@@ -26,12 +28,38 @@ let lastPage = Number.MAX_SAFE_INTEGER;
 let transactionCountByPage;
 
 // Exécution du script.
-main();
+startProfiling();
+
+async function startProfiling() {
+    for (let index = 0; index < 10; index++) {
+        await main();
+    }
+    for (let key in profilerData) {
+        console.log(`${key}: run ${profilerData[key].count}, total time ${profilerData[key].time / 1000}s, avg ${profilerData[key].time / profilerData[key].count}ms`);
+    }
+}
+
+function newStopwatch(name) {
+    const startTime = new Date().getTime();
+    return {
+        stop: () => {
+            if (!profilerData[name]) {
+                profilerData[name] = {
+                    count: 0,
+                    time: 0
+                }
+            }
+            profilerData[name].time += new Date().getTime() - startTime;
+            profilerData[name].count++;
+        }
+    }
+}
 
 /**
  * Fonction principale.
  */
 async function main() {
+    const stopwatch = newStopwatch('main');
     const html = await downloadResourceAtURL(rootUrl);
     const scripts = await downloadScriptsOfHTML(html);
 
@@ -44,7 +72,8 @@ async function main() {
     await runAllPageParsers(html, scripts);
 
     // Affiche les transactions.
-    displayTransactions();
+    // displayTransactions();
+    stopwatch.stop();
 }
 
 /**
@@ -69,6 +98,7 @@ async function runAllPageParsers(html, scripts) {
  * @param {Script[]} scripts Tableau des scripts de la page.
  */
 async function createPageParser(html, scripts) {
+    const stopwatch = newStopwatch('createPageParser');
     let currentPage;
     do {
         currentPage = pages.length;
@@ -82,6 +112,7 @@ async function createPageParser(html, scripts) {
             lastPage = currentPage;
         }
     } while(pages.length < lastPage);
+    stopwatch.stop();
 }
 
 /**
@@ -139,6 +170,7 @@ async function downloadScriptsOfHTML(html) {
  */
 function transactionsStartingAt(startIndex, mainHtml, scripts) {
     return new Promise((resolve, reject) => {
+        const stopwatch = newStopwatch('transactionsStartingAt');
         const dom = new JSDOM(mainHtml, {
             url: `${rootUrl}?start=${startIndex}`,
             userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_2) AppleWebKit/604.4.7 (KHTML, like Gecko) Version/11.0.2 Safari/604.4.7",
@@ -156,6 +188,7 @@ function transactionsStartingAt(startIndex, mainHtml, scripts) {
 
         // Démarre l'exécution des scripts de la page.
         scripts.forEach((script) => dom.runVMScript(script));
+        stopwatch.stop();
     });
 }
 
@@ -165,9 +198,11 @@ function transactionsStartingAt(startIndex, mainHtml, scripts) {
  * @param {string} id Identifiant de l'élément.
  */
 function autoClickOnGenerateButton(element, id) {
+    const stopwatch = newStopwatch('autoClickOnGenerateButton');
     if (id === 'btnGenerate') {
         setTimeout(() => element.click(), 100);
     }
+    stopwatch.stop();
 }
 
 /**
@@ -178,6 +213,7 @@ function autoClickOnGenerateButton(element, id) {
 function autoParseTransactionsWhenTableIsCreated(document, callback) {
     let tableHasBeenCreated = false;
     return (element, tag) => {
+        const stopwatch = newStopwatch('autoParseTransactionsWhenTableIsCreated');
         if (!tableHasBeenCreated && tag === 'th') {
             tableHasBeenCreated = true;
 
@@ -187,6 +223,7 @@ function autoParseTransactionsWhenTableIsCreated(document, callback) {
                 callback(transactions);
             }, 100);
         }
+        stopwatch.stop();
     };
 }
 
@@ -249,6 +286,7 @@ function currencyOf(value) {
  * @returns {Transaction[]} Un tableau contenant les transactions.
  */
 function parseTransactions(html) {
+    const stopwatch = newStopwatch('parseTransactions');
     /** @type {Transaction[]} */
     const transactions = [];
     
@@ -262,6 +300,7 @@ function parseTransactions(html) {
         });
     }
 
+    stopwatch.stop();
     return transactions;
 }
 
