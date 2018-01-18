@@ -1,0 +1,7 @@
+autoParseTransactionsWhenTableIsCreated: run 30617, total time 0.054s, avg 0.0017637260345559657ms
+autoClickOnGenerateButton: run 2286, total time 0.012s, avg 0.005249343832020997ms
+transactionsStartingAt: run 570, total time 7.407s, avg 12.994736842105263ms
+parseTransactions: run 570, total time 0.01s, avg 0.017543859649122806ms
+callback(transactions): run 570, total time 1349.643s, avg 2367.794736842105ms
+createPageParser: run 500, total time 1353.611s, avg 2707.222ms
+main: run 10, total time 110.433s, avg 11043.3ms

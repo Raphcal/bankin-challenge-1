@@ -211,6 +211,7 @@ function autoClickOnGenerateButton(element, id) {
  * @param {Function} callback Fonction à appeler lorsque les transactions sont lues.
  */
 function autoParseTransactionsWhenTableIsCreated(document, callback) {
+    const aStopwatch = newStopwatch('callback(transactions)');
     let tableHasBeenCreated = false;
     return (element, tag) => {
         const stopwatch = newStopwatch('autoParseTransactionsWhenTableIsCreated');
@@ -221,6 +222,7 @@ function autoParseTransactionsWhenTableIsCreated(document, callback) {
                 const html = htmlContainingTransactions(document);
                 const transactions = parseTransactions(html);
                 callback(transactions);
+                aStopwatch.stop();
             }, 100);
         }
         stopwatch.stop();
