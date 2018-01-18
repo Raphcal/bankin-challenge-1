@@ -36,7 +36,7 @@ async function main() {
     const scripts = await downloadScriptsOfHTML(html);
 
     // Récupération de la première page et calcul du nombre de transactions par page.
-    const firstPage = await transactionsStartingAt(0, html, scripts);
+    const firstPage = await makeRace(transactionsStartingAt, [0, html, scripts]);
     transactionCountByPage = firstPage.length;
     pages.push(firstPage);
 
@@ -74,7 +74,8 @@ async function createPageParser(html, scripts) {
         currentPage = pages.length;
         pages.push([]);
 
-        const pageResults = await transactionsStartingAt(currentPage * transactionCountByPage, html, scripts);
+        const startIndex = currentPage * transactionCountByPage;
+        const pageResults = await makeRace(transactionsStartingAt, [startIndex, html, scripts]);
         if (pageResults.length > 0) {
             pages[currentPage] = pageResults;
         }
@@ -128,6 +129,15 @@ async function downloadScriptsOfHTML(html) {
 
     const scripts = await Promise.all(downloads);
     return scripts.map((script) => new Script(script));
+}
+
+/**
+ * 
+ * @param {() => Promise} func 
+ * @param {} args 
+ */
+function makeRace(func, args) {
+    return Promise.race([1, 2].map(() => func(...args)));
 }
 
 /**
