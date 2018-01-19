@@ -151,6 +151,7 @@ function transactionsStartingAt(startIndex, mainHtml, scripts) {
 
                 // Remplace `alert` par une fonction vide pour ne pas être gêné pendant l'exécution.
                 window.alert = (message) => {};
+                window.setTimeout = (handler) => setTimeout(handler);
             }
         });
 
