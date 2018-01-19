@@ -211,7 +211,7 @@ function transactionsStartingAt(startIndex, mainHtml, scripts) {
 function autoClickOnGenerateButton(element, id) {
     const stopwatch = newStopwatch('autoClickOnGenerateButton');
     if (id === 'btnGenerate') {
-        setTimeout(() => element.click(), 10);
+        setTimeout(() => element.click(), 100);
     }
     stopwatch.stop();
 }
@@ -234,7 +234,7 @@ function autoParseTransactionsWhenTableIsCreated(document, callback) {
                 const transactions = parseTransactions(html);
                 callback(transactions);
                 aStopwatch.stop();
-            }, 10);
+            }, 100);
         }
         stopwatch.stop();
     };
