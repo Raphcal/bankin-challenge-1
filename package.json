@@ -7,6 +7,7 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
+    "hoek": "^4.2.1",
     "jsdom": "^11.5.1",
     "request": "^2.83.0"
   },
